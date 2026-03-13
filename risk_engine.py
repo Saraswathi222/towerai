@@ -33,23 +33,29 @@ def detect_risk(data):
     - Scaling
     - Corrosion
     - Chloride corrosion
+    - Silica scaling
+    - Microbial growth
+    - Fouling (Turbidity)
     """
     risks = []
     causes = []
 
-    LSI = data["LSI"]
-    larson = data["Larson"]
+    LSI = data.get("LSI", 0)
+    larson = data.get("Larson", 0)
+    silica = data.get("silica", 0)      # ppm
+    ORP = data.get("ORP", 700)         # mV
+    turbidity = data.get("turbidity", 1) # NTU
 
     # -----------------------------
     # Scaling
     # -----------------------------
     if LSI > 1.5:
         risks.append("Severe Scaling")
-        causes.append("High calcium and alkalinity leading to heavy scale formation")
+        causes.append("High calcium and alkalinity causing heavy scale formation")
     elif LSI > 0.8:
         risks.append("Moderate Scaling")
         causes.append("Moderate hardness and alkalinity may cause scale")
-    
+
     # -----------------------------
     # Corrosion
     # -----------------------------
@@ -71,30 +77,43 @@ def detect_risk(data):
         causes.append("Moderate chloride & sulfate levels")
 
     # -----------------------------
+    # Silica scaling
+    # -----------------------------
+    if silica > 150:
+        risks.append("Severe Silica Scaling")
+        causes.append("Excessive silica in water may form silica scale")
+    elif silica > 120:
+        risks.append("Moderate Silica Scaling")
+        causes.append("Slightly high silica may cause scaling on heat transfer surfaces")
+
+    # -----------------------------
+    # Microbial growth
+    # -----------------------------
+    if ORP < 550:
+        risks.append("Severe Microbial Growth")
+        causes.append("Low oxidizing potential; high risk of bacteria & algae")
+    elif ORP < 650:
+        risks.append("Moderate Microbial Growth")
+        causes.append("Slightly low ORP; microbial growth possible")
+
+    # -----------------------------
+    # Fouling / Turbidity
+    # -----------------------------
+    if turbidity > 6:
+        risks.append("Severe Fouling")
+        causes.append("High turbidity; suspended solids may cause fouling")
+    elif turbidity > 3:
+        risks.append("Moderate Fouling")
+        causes.append("Moderate turbidity; partial fouling possible")
+
+    # -----------------------------
     # Balanced / Normal
     # -----------------------------
     if not risks:
         risks.append("Normal")
-        causes.append("Water chemistry is balanced")
+        causes.append("Water chemistry is balanced and safe")
 
     return risks, causes
-
-# -----------------------------
-# DEVIATION CALCULATION
-# -----------------------------
-def calculate_deviation(actual, predicted):
-    if actual == 0:
-        return 0
-    return abs(predicted - actual) / actual * 100
-
-def calculate_all_deviations(actual_values, predicted_values):
-    deviations = {}
-    for key in actual_values:
-        if key in predicted_values:
-            deviations[key] = round(
-                calculate_deviation(actual_values[key], predicted_values[key]), 2
-            )
-    return deviations
 
 # -----------------------------
 # CHEMICAL SOLUTION ENGINE
@@ -102,12 +121,15 @@ def calculate_all_deviations(actual_values, predicted_values):
 def suggest_solution(data):
     """
     Suggests chemical dosing and operational actions
-    based on calculated LSI and Larson indices
+    based on calculated water chemistry risks
     """
     solutions = []
 
-    LSI = data["LSI"]
-    larson = data["Larson"]
+    LSI = data.get("LSI", 0)
+    larson = data.get("Larson", 0)
+    silica = data.get("silica", 0)
+    ORP = data.get("ORP", 700)
+    turbidity = data.get("turbidity", 1)
 
     # -----------------------------
     # Scaling treatment
@@ -118,7 +140,7 @@ def suggest_solution(data):
             "problem": "Severe Scaling",
             "chemical": "Scale Inhibitor",
             "dosage_ppm": round(dose, 2),
-            "action": "Increase blowdown, reduce hardness, use strong scale inhibitors"
+            "action": "Increase blowdown, reduce hardness, add strong scale inhibitors"
         })
     elif LSI > 0.8:
         dose = 6 + (LSI - 0.8) * 5
@@ -126,7 +148,7 @@ def suggest_solution(data):
             "problem": "Moderate Scaling",
             "chemical": "Scale Inhibitor",
             "dosage_ppm": round(dose, 2),
-            "action": "Control hardness, adjust blowdown, monitor scale deposits"
+            "action": "Control hardness, adjust blowdown, monitor deposits"
         })
 
     # -----------------------------
@@ -157,14 +179,80 @@ def suggest_solution(data):
             "problem": "Severe Chloride Corrosion",
             "chemical": "Operational Control",
             "dosage_ppm": 0,
-            "action": "Reduce cycles of concentration via blowdown, monitor chloride/sulfate levels"
+            "action": "Reduce cycles of concentration via blowdown, monitor chloride/sulfate"
         })
     elif larson > 1.5:
         solutions.append({
             "problem": "Moderate Chloride Corrosion",
             "chemical": "Operational Control",
             "dosage_ppm": 0,
-            "action": "Slightly reduce cycles of concentration, monitor chloride/sulfate levels"
+            "action": "Slightly reduce cycles, monitor chloride/sulfate levels"
+        })
+
+    # -----------------------------
+    # Silica scaling treatment
+    # -----------------------------
+    if silica > 150:
+        solutions.append({
+            "problem": "Severe Silica Scaling",
+            "chemical": "Operational Control",
+            "dosage_ppm": 0,
+            "action": "Increase blowdown, control silica to reduce scaling"
+        })
+    elif silica > 120:
+        solutions.append({
+            "problem": "Moderate Silica Scaling",
+            "chemical": "Operational Control",
+            "dosage_ppm": 0,
+            "action": "Adjust blowdown to control silica levels"
+        })
+
+    # -----------------------------
+    # Microbial growth treatment
+    # -----------------------------
+    if ORP < 500:
+        dose = 20 + (500 - ORP) * 0.1
+        solutions.append({
+            "problem": "Severe Microbial Growth",
+            "chemical": "Oxidizing Biocide",
+            "dosage_ppm": round(dose, 2),
+            "action": "Increase disinfectant feed, clean system thoroughly"
+        })
+    elif ORP < 575:
+        dose = 15 + (575 - ORP) * 0.1
+        solutions.append({
+            "problem": "Moderate Microbial Growth",
+            "chemical": "Oxidizing Biocide",
+            "dosage_ppm": round(dose, 2),
+            "action": "Increase disinfectant feed, monitor microbial activity"
+        })
+    elif ORP < 650:
+        dose = 10 + (650 - ORP) * 0.1
+        solutions.append({
+            "problem": "Slight Microbial Growth",
+            "chemical": "Oxidizing Biocide",
+            "dosage_ppm": round(dose, 2),
+            "action": "Check ORP, maintain mild biocide feed"
+        })
+
+    # -----------------------------
+    # Fouling / Turbidity treatment
+    # -----------------------------
+    if turbidity > 6:
+        dose = 8 + (turbidity - 6) * 1.5
+        solutions.append({
+            "problem": "Severe Fouling",
+            "chemical": "Dispersant",
+            "dosage_ppm": round(dose, 2),
+            "action": "Improve filtration, clean heat exchangers, control solids"
+        })
+    elif turbidity > 3:
+        dose = 5 + (turbidity - 3) * 1.0
+        solutions.append({
+            "problem": "Moderate Fouling",
+            "chemical": "Dispersant",
+            "dosage_ppm": round(dose, 2),
+            "action": "Check filtration, reduce suspended solids"
         })
 
     # -----------------------------
@@ -172,10 +260,10 @@ def suggest_solution(data):
     # -----------------------------
     if not solutions:
         solutions.append({
-            "problem": "Stable system",
+            "problem": "Stable System",
             "chemical": "None",
             "dosage_ppm": 0,
-            "action": "Maintain current treatment program and monitor water chemistry"
+            "action": "Maintain current treatment program, monitor regularly"
         })
 
     return solutions

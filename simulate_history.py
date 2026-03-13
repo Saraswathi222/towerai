@@ -40,20 +40,25 @@ for day in range(days):
 
     temperature = 28 + ((day % 30) * 0.1)
 
+    # -----------------------------
+    # ORP Calculation (mV)
+    # -----------------------------
+    ORP = 700 - ((temperature - 25) * 5) - ((TDS - 500) * 0.05) - ((pH - 7.0) * 3)
+
     records.append([
         day, pH, conductivity, temperature,
         TDS, chloride, sulfate, magnesium,
-        calcium, alkalinity, hardness
+        calcium, alkalinity, hardness, ORP
     ])
 
 columns = [
     "day","pH","conductivity","temperature",
     "TDS","chloride","sulfate","magnesium",
-    "calcium","alkalinity","hardness"
+    "calcium","alkalinity","hardness","ORP"
 ]
 
 df = pd.DataFrame(records, columns=columns)
 
 df.to_csv("cooling_tower_history.csv", index=False)
 
-print("Dataset generated successfully")
+print("Dataset with ORP generated successfully")
